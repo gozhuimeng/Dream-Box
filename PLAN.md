@@ -93,5 +93,6 @@
 ## Current Status
 
 - [x] Step 1 已完成: Android SDK 已安装 (platform 34, build-tools 34.0.0)
-- [ ] Step 2 进行中: 项目骨架已创建 build 文件，待生成 Gradle Wrapper
-- [ ] Step 3: 待开始
+- [x] Step 2 已完成: 项目骨架创建完成，Gradle Wrapper 8.9，构建验证通过 ✅
+- [x] Step 3 已完成: Git 仓库初始化 (main → dev → feat/github-widget)
+- [ ] Step 4 进行中: 开始实现 Widget 核心组件

@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Dreambox</string>
+
+    <!-- Widget -->
+    <string name="widget_description">显示 GitHub 贡献热力图</string>
+    <string name="widget_chart_desc">贡献热力图</string>
+    <string name="widget_refresh_desc">刷新</string>
+    <string name="widget_loading">加载中…</string>
+
+    <!-- 配置 Activity -->
+    <string name="config_title">Widget 配置</string>
+    <string name="config_username_label">GitHub 用户名</string>
+    <string name="config_color_label">热力图颜色</string>
+    <string name="config_refresh_label">刷新间隔（分钟）</string>
+    <string name="config_save">保存</string>
+    <string name="config_quiet_hours">安静时段</string>
+    <string name="config_quiet_start">开始时间</string>
+    <string name="config_quiet_end">结束时间</string>
 </resources>
