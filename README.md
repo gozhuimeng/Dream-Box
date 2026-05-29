@@ -13,6 +13,7 @@
     <img src="https://img.shields.io/github/v/release/gozhuimeng/Dream-Box?label=版本" alt="Release">
   </a>
   <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-orange" alt="License">
+  <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-orange" alt="License">
   <img src="https://img.shields.io/badge/minSdk-24-brightgreen" alt="minSdk 24">
   <img src="https://img.shields.io/badge/targetSdk-34-blue" alt="targetSdk 34">
   <img src="https://img.shields.io/badge/Kotlin-2.0-purple" alt="Kotlin 2.0">

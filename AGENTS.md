@@ -9,7 +9,7 @@
 - 定位: 个人工具箱 App
 - 最低SDK: 24 / 目标SDK: 34
 - 当前状态: 4x2 + 2x1 双 Widget，支持暗色主题 + 圆角
-- 开发分支: `feat/github-widget`
+- 开发分支: `dev`
 
 ## 网络代理策略
 - 请求默认设置 30 秒超时，**不自动使用代理**
@@ -160,12 +160,6 @@ data/          → repository/ (实现), remote/ (API), local/ (存储)
 | FAB "添加 Widget" 产生无效配置 | 改为 Toast 提示用户从桌面添加 |
 | 编辑对话框保存时未传 theme | `config.copy()` 中包含 `theme` 字段 |
 
-## 新需求
-- [x] 2x1 迷你 Widget — 极简布局，只展示热力图，无用户名/时间戳
-- [x] 多 Widget 独立实例 — 每个 appWidgetId 独立配置
-- [x] 暗色背景（半透明） — 可选暗色主题，背景略带透明度
-- [x] 圆角 — Widget 背景使用圆角 drawable
-
 ## Git 规范
 ```
 feat(widget): 添加 GitHub 贡献热力图 Widget
@@ -225,4 +219,4 @@ data/          → repository/ (实现), remote/ (API), local/ (存储)
 - **SVG 缩放**: 裁剪左侧标签 + 放大填满 + 右侧对齐
 - **跳过配置修复**: 跳过时保存默认配置，Widget 在 App 设置中可见
 - **DataStore 清理**: Widget 被删除时自动清理配置数据
-- **版本**: v0.1.1 (versionCode 2)
+- **版本**: v0.1.2 (versionCode 3)

@@ -85,10 +85,10 @@
 
 - `main` — 稳定版本
 - `dev` — 开发集成分支
-- `feat/github-widget` — 当前功能开发分支
+- `feat/github-widget` — 已完成的功能开发分支
 - `fix/*` — Bug 修复分支
 
-> 本期开发在 `feat/github-widget` 分支上进行，完成后合并到 `dev`，测试稳定后合入 `main`
+> 本期开发已在 `feat/github-widget` 分支上完成，已合并到 `dev`。
 
 ## Current Status
 
@@ -111,7 +111,19 @@
   - Worker 使用唯一 Work + KEEP 策略防止并发
   - 未配置用户名的 Widget 跳过不更新 UI
 
+- [x] v0.1.2: 新增功能 + 质量修复
+  - 新增 2x1 迷你 Widget（GithubWidgetTinyProvider）
+  - 新增暗色主题（半透明背景 + 12dp 圆角）
+  - 新增亮色/暗色圆角背景 drawable
+  - SVG 视觉缩放：裁剪左侧标签 + 放大填满 + 右侧对齐
+  - 跳过配置后保存默认配置到 DataStore
+  - Widget 删除时清理 DataStore（onDeleted）
+  - 编辑对话框添加暗色主题开关
+  - FAB 改为引导提示（从桌面添加）
+  - 编辑保存时正确传递 theme 字段
+
 ## 下一步
 
-- 完成功能验证后合并到 `main` 分支
-- 后续扩展更多小工具功能
+- [x] 功能开发完成，已合并到 `dev`
+- [x] v0.1.2 Release 发布
+- [ ] 后续扩展更多小工具功能
