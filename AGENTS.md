@@ -167,6 +167,7 @@ data/          → repository/ (实现), remote/ (API), local/ (存储)
 | Profile 管理界面 | App 内独立创建/编辑/删除配置项 |
 | Widget 引用 Profile | Widget 绑定一个已存在的 Profile，不直接持有配置 |
 | Widget 配置流程 | 添加 Widget 时从已有 Profile 列表中选择 |
+| 点击 Widget → 配置页 | 点击桌面 Widget 打开配置页，可切换/新建 Profile |
 | 按 Profile 刷新 | 仅刷新被活跃 Widget 引用的 Profile |
 | 配置复用 | 同一个 Profile 可被多个 Widget 使用 |
 | 向下兼容 | 现有配置自动迁移为 Profile |

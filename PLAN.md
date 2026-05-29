@@ -179,13 +179,26 @@
   - 长按/侧滑: 删除 Profile
 - **移除** 旧有的"以 widget 为中心"的列表
 
-#### 4. Widget 配置流程变化
+#### 4. Widget 配置与交互流程变化
 
 - **添加 Widget** → `WidgetConfigureActivity` 打开
   - 显示所有已有 Profile 列表供选择
   - 底部"新建 Profile"按钮
   - 选择后 → widget 绑定该 profile
-- **点击 Widget** → 打开 App 到 Profile 列表（或快速切换 Profile）
+
+- **点击 Widget** → 打开配置页面（Profile 列表）
+  - 显示所有 Profile，当前已选中的高亮标记
+  - 点击其他 Profile → 立即切换绑定 → widget 更新内容
+  - 点击"新建 Profile" → 新建后自动绑定到当前 widget
+  - 退出配置页面后，widget 显示新绑定的 Profile 内容
+
+- **交互闭环**:
+  ```
+  添加 widget → 选 profile → 显示
+       ↑                        |
+       |  点击 widget            |
+       +--- 配置页(切换/新建) ---+
+  ```
 
 #### 5. 刷新逻辑变化
 
