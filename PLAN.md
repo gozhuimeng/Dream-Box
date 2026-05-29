@@ -92,7 +92,18 @@
 
 ## Current Status
 
-- [x] Step 1 已完成: Android SDK 已安装 (platform 34, build-tools 34.0.0)
-- [x] Step 2 已完成: 项目骨架创建完成，Gradle Wrapper 8.9，构建验证通过 ✅
-- [x] Step 3 已完成: Git 仓库初始化 (main → dev → feat/github-widget)
-- [ ] Step 4 进行中: 开始实现 Widget 核心组件
+- [x] Step 1: Android SDK 已安装 (platform 34, build-tools 34.0.0)
+- [x] Step 2: 项目骨架创建完成，Gradle Wrapper 8.9
+- [x] Step 3: Git 仓库初始化 (main → dev → feat/github-widget)
+- [x] Step 4: Widget 基础组件 (Provider + RemoteViews 布局)
+- [x] Step 5: SVG 获取 (GithubChartApi) + 渲染 (AndroidSVG→Bitmap)
+- [x] Step 6: DataStore 配置存储 (per-appWidgetId 独立配置)
+- [x] Step 7: WorkManager 后台刷新 (含安静时段判断)
+- [x] Step 8: 设置界面 (Compose UI + ViewModel)
+- [x] Step 9: AndroidManifest 组件注册
+- [x] Step 10: ✅ 构建验证通过
+
+## 下一步
+
+- Bug 修复与测试
+- 完成后合并到 dev 分支

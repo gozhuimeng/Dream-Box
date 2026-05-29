@@ -8,7 +8,8 @@
 - 包名: `com.zhuimeng.dreambox`
 - 定位: 个人工具箱 App
 - 最低SDK: 24 / 目标SDK: 34
-- 当前状态: 项目初始化阶段 (尚无 build 文件)
+- 当前状态: GitHub 贡献热力图 Widget 功能已实现，APK 构建通过
+- 开发分支: `feat/github-widget`
 
 ## 网络代理策略
 - 请求默认设置 30 秒超时，**不自动使用代理**
