@@ -14,8 +14,8 @@ android {
         applicationId = "com.zhuimeng.dreambox"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 4
+        versionName = "0.1.3"
     }
 
     buildTypes {
@@ -25,6 +25,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -39,6 +40,21 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    // 自定义 APK 输出文件名
+    afterEvaluate {
+        tasks.named("packageRelease") {
+            doLast {
+                val apk = layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
+                val dest = layout.buildDirectory.file("outputs/apk/release/Dream Box-${android.defaultConfig.versionName}-release.apk").get().asFile
+                if (apk.exists()) {
+                    apk.copyTo(dest, overwrite = true)
+                    apk.delete()
+                    println("APK 已重命名为: ${dest.name}")
+                }
+            }
+        }
     }
 }
 

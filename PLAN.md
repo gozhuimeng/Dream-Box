@@ -85,13 +85,155 @@
 
 - `main` — 稳定版本
 - `dev` — 开发集成分支
-- `feat/github-widget` — 当前功能开发分支
+- `feat/github-widget` — 已完成的功能开发分支
 - `fix/*` — Bug 修复分支
 
-> 本期开发在 `feat/github-widget` 分支上进行，完成后合并到 `dev`，测试稳定后合入 `main`
+> 本期开发已在 `feat/github-widget` 分支上完成，已合并到 `dev`。
 
 ## Current Status
 
-- [x] Step 1 已完成: Android SDK 已安装 (platform 34, build-tools 34.0.0)
-- [ ] Step 2 进行中: 项目骨架已创建 build 文件，待生成 Gradle Wrapper
-- [ ] Step 3: 待开始
+- [x] Step 1: Android SDK 已安装 (platform 34, build-tools 34.0.0)
+- [x] Step 2: 项目骨架创建完成，Gradle Wrapper 8.9
+- [x] Step 3: Git 仓库初始化 (main → dev → feat/github-widget)
+- [x] Step 4: Widget 基础组件 (Provider + RemoteViews 布局)
+- [x] Step 5: SVG 获取 (GithubChartApi) + 渲染 (AndroidSVG→Bitmap)
+- [x] Step 6: DataStore 配置存储 (per-appWidgetId 独立配置)
+- [x] Step 7: WorkManager 后台刷新 (含安静时段判断)
+- [x] Step 8: 设置界面 (Compose UI + ViewModel)
+- [x] Step 9: AndroidManifest 组件注册
+- [x] Step 10: 构建验证通过
+
+## 修复记录
+
+- [x] v0.1.1: Widget 闪烁问题修复
+  - `onUpdate` 不再修改 Widget UI（只触发后台 Worker）
+  - 添加 30 秒防抖过滤 MIUI 频繁调用
+  - Worker 使用唯一 Work + KEEP 策略防止并发
+  - 未配置用户名的 Widget 跳过不更新 UI
+
+- [x] v0.1.2: 新增功能 + 质量修复
+  - 新增 2x1 迷你 Widget（GithubWidgetTinyProvider）
+  - 新增暗色主题（半透明背景 + 12dp 圆角）
+  - 新增亮色/暗色圆角背景 drawable
+  - SVG 视觉缩放：裁剪左侧标签 + 放大填满 + 右侧对齐
+  - 跳过配置后保存默认配置到 DataStore
+  - Widget 删除时清理 DataStore（onDeleted）
+  - 编辑对话框添加暗色主题开关
+  - FAB 改为引导提示（从桌面添加）
+  - 编辑保存时正确传递 theme 字段
+
+## 下一步
+
+- [x] 功能开发完成，已合并到 `dev`
+- [x] v0.1.2 Release 发布
+- [x] v0.1.3: 架构重构 — 配置项与 Widget 解耦
+- [x] v0.1.3 Bugfix: Worker 健壮性 + 安静时段优化
+
+---
+
+## v0.1.3 总结: 配置项与 Widget 解耦 ✅
+
+### v0.1.3 Bugfix — Worker 健壮性 + 安静时段修复 ✅
+
+### 已完成变更
+
+### 痛点分析
+
+当前问题:
+1. 必须先添加 Widget，才能配置（"创建小部件，然后填好配置"）
+2. 配置绑定 appWidgetId，Widget 删除后配置也消失
+3. 没有"独立配置项"的概念，无法预先创建多套配置
+
+### 目标
+
+```
+旧: Widget ← 1:1 → 配置（毁 widget = 丢配置）
+新: Widget → 引用 → Profile（独立配置项，可复用）
+                        ↑
+                    App 内自由创建/编辑/删除
+```
+
+### 详细方案
+
+#### 1. 数据模型重构
+
+| 当前 (v0.1.2) | 新 (v0.1.3) |
+|---|---|
+| `WidgetConfig(appWidgetId, username, color, ...)` | `WidgetProfile(id, name, username, color, ...)` |
+| key = appWidgetId | key = profileId (UUID) |
+| 无用户命名 | 新增 `name` 字段（如"工作号"、"小号"） |
+
+新增映射表: `appWidgetId → profileId`（一个 profile 可被多个 widget 引用）
+
+#### 2. 存储层变化
+
+- **Profile 存储**: 独立 DataStore（或同一 DataStore 用不同 key prefix）
+  - `profile_${profileId}_name`
+  - `profile_${profileId}_username`
+  - `profile_${profileId}_color`
+  - etc.
+- **映射存储**: `widget_profile_map` DataStore
+  - `widget_${appWidgetId}_profile` → profileId
+
+#### 3. 界面变化
+
+- **App 主页** → 显示 **Profile 列表**（不是 widget 列表）
+  - 每个卡片: profile name, username, 预览颜色, 已关联 widget 数
+  - FAB: 新建 Profile
+  - 点击: 编辑 Profile
+  - 长按/侧滑: 删除 Profile
+- **移除** 旧有的"以 widget 为中心"的列表
+
+#### 4. Widget 配置与交互流程变化
+
+- **添加 Widget** → `WidgetConfigureActivity` 打开
+  - 显示所有已有 Profile 列表供选择
+  - 底部"新建 Profile"按钮
+  - 选择后 → widget 绑定该 profile
+
+- **点击 Widget** → 打开配置页面（Profile 列表）
+  - 显示所有 Profile，当前已选中的高亮标记
+  - 点击其他 Profile → 立即切换绑定 → widget 更新内容
+  - 点击"新建 Profile" → 新建后自动绑定到当前 widget
+  - 退出配置页面后，widget 显示新绑定的 Profile 内容
+
+- **交互闭环**:
+  ```
+  添加 widget → 选 profile → 显示
+       ↑                        |
+       |  点击 widget            |
+       +--- 配置页(切换/新建) ---+
+  ```
+
+#### 5. 刷新逻辑变化
+
+- `GithubWidgetWorker` 以 **profile** 为单位刷新
+- 刷新前检查 profile 是否被至少一个活跃 widget 引用
+- 未被引用的 profile 跳过刷新（省流量省电）
+- `onDeleted`: 检查是否还有其他 widget 引用该 profile，无则停止刷新
+
+#### 6. 配置项管理（新增功能）
+
+- **独立创建**：在 App 中直接新建 Profile，填写用户名/颜色/主题等
+- **独立删除**：删除 Profile 时，已关联的 widget 显示"配置已删除"提示
+- **复用**：同一个 Profile 可被多个 Widget 引用
+- **改名**：Profile 支持自定义名称
+
+### 主要影响文件
+
+| 文件 | 变化 |
+|------|------|
+| `data/WidgetConfig.kt` | 重命名为 `WidgetProfile.kt`，添加 `id` 和 `name` 字段 |
+| `data/WidgetConfigRepository.kt` | 重写为 Profile 存储 + widget→profile 映射 |
+| `widget/WidgetConfigureActivity.kt` | 改为 Profile 选择界面 |
+| `widget/GithubWidgetProvider.kt` | onUpdate 改为读取 profile |
+| `widget/GithubWidgetWorker.kt` | 按 profile 刷新，检查引用 |
+| `ui/WidgetSettingsViewModel.kt` | 重构为 Profile 管理 |
+| `MainActivity.kt` | 改为 Profile 列表 UI |
+| `AGENTS.md` | 更新记录 |
+
+### 注意事项
+
+- **向下兼容**: 旧版用户已有 widget 配置需要迁移为 Profile
+- **UUID 生成**: Profile ID 使用 `UUID.randomUUID().toString()`
+- **不展示不刷新**: 核心原则 — 没有被任何 widget 引用的 profile 不触发网络请求
