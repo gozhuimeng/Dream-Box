@@ -2,9 +2,11 @@ package com.zhuimeng.dreambox.widget
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -21,12 +23,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-/**
- * GitHub 贡献图更新 Worker
- *
- * 负责从 ghchart.rshah.org 获取 SVG，渲染为 Bitmap 并更新 Widget UI。
- * 支持安静时段判断（在指定时间段内跳过刷新）。
- */
 @HiltWorker
 class GithubWidgetWorker @AssistedInject constructor(
     @Assisted private val appContext: Context,
@@ -34,130 +30,154 @@ class GithubWidgetWorker @AssistedInject constructor(
     private val configRepository: WidgetConfigRepository
 ) : CoroutineWorker(appContext, workerParams) {
 
+    companion object {
+        private const val TAG = "GithubWidgetWorker"
+        private const val KEY_WIDGET_IDS = "widget_ids"
+        private const val WORK_NAME_PREFIX = "github_widget_refresh_"
+
+        fun enqueueRefresh(context: Context, appWidgetIds: IntArray) {
+            Log.d(TAG, "enqueueRefresh: ids=${appWidgetIds.contentToString()}")
+            for (appWidgetId in appWidgetIds) {
+                val workName = "${WORK_NAME_PREFIX}oneshot_$appWidgetId"
+                val workRequest = OneTimeWorkRequestBuilder<GithubWidgetWorker>()
+                    .setInputData(workDataOf(KEY_WIDGET_IDS to intArrayOf(appWidgetId)))
+                    .build()
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    workName,
+                    ExistingWorkPolicy.KEEP,
+                    workRequest
+                )
+            }
+        }
+
+        fun startPeriodicRefresh(
+            context: Context,
+            appWidgetId: Int,
+            intervalMinutes: Long
+        ) {
+            val effectiveInterval = maxOf(intervalMinutes, 15L)
+            Log.d(TAG, "startPeriodicRefresh: id=$appWidgetId interval=${effectiveInterval}min")
+            val workRequest = PeriodicWorkRequestBuilder<GithubWidgetWorker>(
+                effectiveInterval, TimeUnit.MINUTES
+            )
+                .setInputData(workDataOf(KEY_WIDGET_IDS to intArrayOf(appWidgetId)))
+                .build()
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                "$WORK_NAME_PREFIX$appWidgetId",
+                ExistingPeriodicWorkPolicy.UPDATE,
+                workRequest
+            )
+        }
+
+        fun cancelPeriodicRefresh(context: Context, appWidgetId: Int) {
+            Log.d(TAG, "cancelPeriodicRefresh: id=$appWidgetId")
+            WorkManager.getInstance(context)
+                .cancelUniqueWork("$WORK_NAME_PREFIX$appWidgetId")
+        }
+    }
+
     private val appWidgetManager = AppWidgetManager.getInstance(appContext)
 
     override suspend fun doWork(): Result {
-        val appWidgetIds = inputData.getIntArray(KEY_WIDGET_IDS) ?: return Result.failure()
+        val appWidgetIds = inputData.getIntArray(KEY_WIDGET_IDS)
+        Log.d(TAG, "doWork 开始执行, ids=${appWidgetIds?.contentToString()}")
+
+        if (appWidgetIds == null) {
+            Log.e(TAG, "doWork: 没有 widget IDs")
+            return Result.failure()
+        }
 
         for (appWidgetId in appWidgetIds) {
+            Log.d(TAG, "处理 widget id=$appWidgetId")
             try {
                 // 1. 读取配置
+                Log.d(TAG, "读取配置 id=$appWidgetId")
                 val config = configRepository.getConfigSnapshot(appWidgetId)
+                Log.d(TAG, "配置: user=${config.username}, color=${config.color}, theme=${config.theme}")
 
-                // 如果未配置用户名，跳过
                 if (config.username.isBlank()) {
-                    GithubWidgetProvider.updateWidgetUi(
-                        appContext, appWidgetManager, appWidgetId
-                    )
+                    Log.w(TAG, "用户名未配置, 跳过 id=$appWidgetId")
+                    // 不更新 UI — 保持当前显示，防止触发 onUpdate 循环
                     continue
                 }
 
                 // 2. 检查安静时段
                 if (isInQuietHours(config.quietHourStart, config.quietHourEnd)) {
-                    // 安静时段内，跳过刷新
+                    Log.d(TAG, "安静时段中, 跳过刷新 id=$appWidgetId")
                     continue
                 }
 
-                // 3. 获取 SVG
+                val isDark = config.theme == "dark"
+
+                // 3. 获取 widget 实际显示尺寸
+                val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+                val wDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
+                val hDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160)
+                val density = appContext.resources.displayMetrics.density
+                val chartWidthPx = (wDp * density).toInt()
+                val chartHeightPx = ((hDp - 56) * density).toInt() // 减去顶部用户名和底部工具栏
+                Log.d(TAG, "widget 尺寸: ${wDp}x${hDp}dp, 图表区域: ${chartWidthPx}x${chartHeightPx}px")
+
+                // 4. 获取 SVG
+                Log.d(TAG, "开始获取 SVG: color=${config.color}, user=${config.username}")
                 val svgBytes = GithubChartApi.fetchSvgBytes(
                     color = config.color,
                     username = config.username
                 )
+                Log.d(TAG, "SVG 获取成功: ${svgBytes.size} bytes")
 
-                // 4. 渲染为 Bitmap
-                val bitmap = SvgRenderer.renderToBitmap(svgBytes)
+                // 5. 渲染为 Bitmap（裁剪左侧标签 + 放大填满）
+                Log.d(TAG, "开始渲染 SVG -> Bitmap")
+                val bitmap = SvgRenderer.renderToWidgetBitmap(
+                    svgBytes,
+                    chartWidthPx,
+                    chartHeightPx
+                )
+                Log.d(TAG, "渲染结果: bitmap=${if (bitmap != null) "${bitmap.width}x${bitmap.height}" else "null"}")
 
-                // 5. 更新 Widget UI
-                val timestamp = SimpleDateFormat("HH:mm", Locale.getDefault())
-                    .format(Date())
+                // 6. 更新 Widget UI
+                val timestamp = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
                 GithubWidgetProvider.updateWidgetData(
                     context = appContext,
                     appWidgetManager = appWidgetManager,
                     appWidgetId = appWidgetId,
                     username = config.username,
                     chartBitmap = bitmap,
-                    timestamp = "更新于 $timestamp"
+                    timestamp = "更新于 $timestamp",
+                    isDarkTheme = isDark
                 )
+                Log.d(TAG, "Widget UI 已更新 id=$appWidgetId")
 
-                // 6. 启动周期性刷新（如果尚未启动）
+                // 7. 启动周期性刷新
                 GithubWidgetWorker.startPeriodicRefresh(
                     appContext, appWidgetId, config.refreshIntervalMinutes
                 )
 
             } catch (e: Exception) {
-                // 单个 widget 失败不影响其他 widget
-                e.printStackTrace()
+                Log.e(TAG, "处理 widget id=$appWidgetId 失败", e)
+                // 显示错误信息到 widget（仅当配置读取成功时）
+                try {
+                    val snapshot = configRepository.getConfigSnapshot(appWidgetId)
+                    val isDark = snapshot.theme == "dark"
+                    GithubWidgetProvider.showError(
+                        appContext, appWidgetManager, appWidgetId,
+                        "加载失败: ${e.message ?: "未知错误"}",
+                        isDarkTheme = isDark
+                    )
+                } catch (_: Exception) {}
             }
         }
 
         return Result.success()
     }
 
-    /**
-     * 判断当前时间是否在安静时段内
-     *
-     * 安静时段支持跨天（如 22:00 ~ 07:00）
-     */
     private fun isInQuietHours(startHour: Int, endHour: Int): Boolean {
-        if (startHour == endHour) return false // 起止相同表示不启用
-
-        val now = Calendar.getInstance()
-        val currentHour = now.get(Calendar.HOUR_OF_DAY)
-
+        if (startHour == endHour) return false
+        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         return if (startHour < endHour) {
-            // 当天内，如 02:00 ~ 07:00
             currentHour in startHour until endHour
         } else {
-            // 跨天，如 22:00 ~ 07:00
             currentHour >= startHour || currentHour < endHour
-        }
-    }
-
-    companion object {
-        private const val KEY_WIDGET_IDS = "widget_ids"
-        private const val WORK_NAME_PREFIX = "github_widget_refresh_"
-
-        /**
-         * 立即刷新指定的 widgets
-         */
-        fun enqueueRefresh(context: Context, appWidgetIds: IntArray) {
-            val workRequest = OneTimeWorkRequestBuilder<GithubWidgetWorker>()
-                .setInputData(workDataOf(KEY_WIDGET_IDS to appWidgetIds))
-                .build()
-            WorkManager.getInstance(context)
-                .enqueue(workRequest)
-        }
-
-        /**
-         * 启动周期性刷新
-         */
-        fun startPeriodicRefresh(
-            context: Context,
-            appWidgetId: Int,
-            intervalMinutes: Long
-        ) {
-            // WorkManager 最小间隔为 15 分钟
-            val effectiveInterval = maxOf(intervalMinutes, 15L)
-
-            val workRequest = PeriodicWorkRequestBuilder<GithubWidgetWorker>(
-                effectiveInterval, TimeUnit.MINUTES
-            )
-                .setInputData(workDataOf(KEY_WIDGET_IDS to intArrayOf(appWidgetId)))
-                .build()
-            WorkManager.getInstance(context)
-                .enqueueUniquePeriodicWork(
-                    "$WORK_NAME_PREFIX$appWidgetId",
-                    ExistingPeriodicWorkPolicy.UPDATE,
-                    workRequest
-                )
-        }
-
-        /**
-         * 取消指定 widget 的周期性刷新
-         */
-        fun cancelPeriodicRefresh(context: Context, appWidgetId: Int) {
-            WorkManager.getInstance(context)
-                .cancelUniqueWork("$WORK_NAME_PREFIX$appWidgetId")
         }
     }
 }

@@ -87,8 +87,13 @@ class WidgetConfigureActivity : ComponentActivity() {
                         }
                     },
                     onSkip = {
-                        // 跳过配置也能添加 Widget（后续在 App 中配置）
-                        saveAndExit(appWidgetId)
+                        lifecycleScope.launch {
+                            // 保存默认配置，使 widget 出现在 App 设置列表中
+                            configRepository.saveConfig(
+                                WidgetConfig(appWidgetId = appWidgetId)
+                            )
+                            saveAndExit(appWidgetId)
+                        }
                     }
                 )
             }
@@ -117,6 +122,7 @@ private fun ConfigureWidgetScreen(
     var username by remember { mutableStateOf(initialUsername) }
     var color by remember { mutableStateOf(initialColor) }
     var refreshInterval by remember { mutableStateOf("60") }
+    var isDarkTheme by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -149,7 +155,9 @@ private fun ConfigureWidgetScreen(
                                     username = username.trim(),
                                     color = color.trim().ifBlank { WidgetConfig.DEFAULT_COLOR },
                                     refreshIntervalMinutes = refreshInterval.toLongOrNull()
-                                        ?: WidgetConfig.DEFAULT_REFRESH_INTERVAL
+                                        ?: WidgetConfig.DEFAULT_REFRESH_INTERVAL,
+                                    theme = if (isDarkTheme) WidgetConfig.THEME_DARK
+                                        else WidgetConfig.THEME_LIGHT
                                 )
                             )
                         },
@@ -210,6 +218,22 @@ private fun ConfigureWidgetScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // 主题选择
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "暗色背景",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Switch(
+                    checked = isDarkTheme,
+                    onCheckedChange = { isDarkTheme = it }
+                )
+            }
 
             Spacer(modifier = Modifier.weight(1f))
         }

@@ -2,6 +2,7 @@ package com.zhuimeng.dreambox.ui
 
 import android.app.Application
 import android.appwidget.AppWidgetManager
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.zhuimeng.dreambox.data.WidgetConfig
@@ -21,9 +22,12 @@ import javax.inject.Inject
 
 @HiltViewModel
 class WidgetSettingsViewModel @Inject constructor(
-    private val application: Application,
-    private val configRepository: WidgetConfigRepository
+    private val configRepository: WidgetConfigRepository,
+    application: Application
 ) : AndroidViewModel(application) {
+    companion object {
+        private const val TAG = "WidgetSettingsVM"
+    }
 
     /** 所有配置的 widget 列表 */
     private val _widgetConfigs = MutableStateFlow<List<WidgetConfig>>(emptyList())
@@ -59,7 +63,7 @@ class WidgetSettingsViewModel @Inject constructor(
             configRepository.saveConfig(config)
             // 启动周期性刷新
             GithubWidgetWorker.startPeriodicRefresh(
-                application,
+                getApplication(),
                 config.appWidgetId,
                 config.refreshIntervalMinutes
             )
@@ -73,22 +77,15 @@ class WidgetSettingsViewModel @Inject constructor(
     fun deleteConfig(appWidgetId: Int) {
         viewModelScope.launch {
             configRepository.deleteConfig(appWidgetId)
-            GithubWidgetWorker.cancelPeriodicRefresh(application, appWidgetId)
+            GithubWidgetWorker.cancelPeriodicRefresh(getApplication(), appWidgetId)
         }
     }
 
     /** 立即刷新指定 widget */
     fun triggerRefresh(appWidgetId: Int) {
-        viewModelScope.launch {
-            val config = configRepository.getConfigSnapshot(appWidgetId)
-            val appWidgetManager = AppWidgetManager.getInstance(application)
-            GithubWidgetProvider.updateWidgetUi(
-                application, appWidgetManager, appWidgetId
-            )
-            GithubWidgetWorker.enqueueRefresh(
-                application, intArrayOf(appWidgetId)
-            )
-        }
+        GithubWidgetWorker.enqueueRefresh(
+            getApplication(), intArrayOf(appWidgetId)
+        )
     }
 
     /** 开始编辑配置 */
@@ -98,6 +95,10 @@ class WidgetSettingsViewModel @Inject constructor(
 
     /** 为新 widget 创建默认配置 */
     fun createDefaultConfig(appWidgetId: Int) {
+        if (appWidgetId < 0) {
+            Log.w(TAG, "无效的 appWidgetId: $appWidgetId，请在桌面添加 Widget")
+            return
+        }
         _editingConfig.value = WidgetConfig(appWidgetId = appWidgetId)
     }
 

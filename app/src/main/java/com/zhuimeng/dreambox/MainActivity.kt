@@ -2,6 +2,7 @@ package com.zhuimeng.dreambox
 
 import android.appwidget.AppWidgetManager
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,8 +70,15 @@ fun DreamboxTheme(
             )
         },
         floatingActionButton = {
+            val context = LocalContext.current
             ExtendedFloatingActionButton(
-                onClick = { viewModel.createDefaultConfig(WidgetConfig.INVALID_WIDGET_ID) },
+                onClick = {
+                    Toast.makeText(
+                        context,
+                        "请在桌面长按空白处 → 添加 Widget 来添加新的 GitHub 热力图",
+                        Toast.LENGTH_LONG
+                    ).show()
+                },
                 icon = { Icon(Icons.Default.Add, contentDescription = "添加") },
                 text = { Text("添加 Widget") }
             )
@@ -238,6 +247,7 @@ fun WidgetConfigDialog(
     }
     var quietStart by remember { mutableStateOf(config.quietHourStart.toString()) }
     var quietEnd by remember { mutableStateOf(config.quietHourEnd.toString()) }
+    var isDarkTheme by remember { mutableStateOf(config.theme == WidgetConfig.THEME_DARK) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -285,6 +295,18 @@ fun WidgetConfigDialog(
                         modifier = Modifier.weight(1f)
                     )
                 }
+                // 暗色主题开关
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("暗色背景", style = MaterialTheme.typography.bodyLarge)
+                    Switch(
+                        checked = isDarkTheme,
+                        onCheckedChange = { isDarkTheme = it }
+                    )
+                }
             }
         },
         confirmButton = {
@@ -297,7 +319,9 @@ fun WidgetConfigDialog(
                     quietHourStart = quietStart.toIntOrNull()
                         ?: WidgetConfig.DEFAULT_QUIET_START,
                     quietHourEnd = quietEnd.toIntOrNull()
-                        ?: WidgetConfig.DEFAULT_QUIET_END
+                        ?: WidgetConfig.DEFAULT_QUIET_END,
+                    theme = if (isDarkTheme) WidgetConfig.THEME_DARK
+                        else WidgetConfig.THEME_LIGHT
                 )
                 onSave(updated)
             }) {

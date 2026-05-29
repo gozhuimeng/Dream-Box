@@ -3,113 +3,156 @@ package com.zhuimeng.dreambox.widget
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.util.Log
 import android.widget.RemoteViews
 import com.zhuimeng.dreambox.R
+import com.zhuimeng.dreambox.data.WidgetConfigRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 
-/**
- * GitHub 贡献热力图 Widget Provider
- *
- * 每个 widget 实例独立配置（用户名、颜色、刷新频率、安静时段），
- * 配置存储在 DataStore 中，按 appWidgetId 索引。
- *
- * 数据更新通过 WorkManager 实现（而非系统默认的定时更新），
- * 以支持自定义刷新频率、安静时段和手动刷新。
- */
-class GithubWidgetProvider : AppWidgetProvider() {
-
-    override fun onUpdate(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray
-    ) {
-        for (appWidgetId in appWidgetIds) {
-            updateWidgetUi(context, appWidgetManager, appWidgetId)
-        }
-        // 触发后台工作刷新数据
-        GithubWidgetWorker.enqueueRefresh(context, appWidgetIds)
-    }
-
-    override fun onEnabled(context: Context) {
-        // 第一个 widget 被添加时触发
-    }
-
-    override fun onDisabled(context: Context) {
-        // 最后一个 widget 被移除时触发
-    }
-
-    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
-        // widget 被删除时，清理对应的配置
-        super.onDeleted(context, appWidgetIds)
-    }
+open class GithubWidgetProvider : AppWidgetProvider() {
 
     companion object {
-        /**
-         * 更新 widget 的 UI（显示加载状态/用户名）
-         */
-        fun updateWidgetUi(
-            context: Context,
-            appWidgetManager: AppWidgetManager,
-            appWidgetId: Int
-        ) {
-            val views = RemoteViews(context.packageName, R.layout.github_widget_layout)
+        private const val TAG = "GithubWidgetProvider"
+        private const val DEBOUNCE_MS = 30_000L
+        private val lastEnqueueTime = ConcurrentHashMap<Int, Long>()
 
-            // 设置用户名占位（后续由 Worker 更新）
-            views.setTextViewText(R.id.widget_username, "加载中...")
-
-            // 设置刷新按钮点击事件
-            val refreshIntent = Intent(context, GithubWidgetProvider::class.java).apply {
-                action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
+        /** 根据 widget 尺寸自动选择布局 */
+        private fun getLayoutForSize(appWidgetManager: AppWidgetManager, appWidgetId: Int): Int {
+            val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+            val minWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+            return when {
+                minWidthDp < 130 -> R.layout.github_widget_layout_tiny  // 2x1
+                else -> R.layout.github_widget_layout                   // 4x2
             }
-            val refreshPendingIntent = PendingIntent.getBroadcast(
-                context,
-                appWidgetId,
-                refreshIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.widget_refresh, refreshPendingIntent)
-
-            appWidgetManager.updateAppWidget(appWidgetId, views)
         }
 
-        /**
-         * 更新 widget 展示的数据（图表 bitmap + 用户名 + 时间戳）
-         */
         fun updateWidgetData(
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int,
             username: String,
             chartBitmap: android.graphics.Bitmap?,
-            timestamp: String
+            timestamp: String,
+            isDarkTheme: Boolean = false
         ) {
-            val views = RemoteViews(context.packageName, R.layout.github_widget_layout)
+            Log.d(TAG, "updateWidgetData id=$appWidgetId user=$username dark=$isDarkTheme")
+            val layoutResId = getLayoutForSize(appWidgetManager, appWidgetId)
+            val views = createBaseViews(context, appWidgetId, layoutResId, isDarkTheme)
 
-            views.setTextViewText(R.id.widget_username, username)
+            try { views.setTextViewText(R.id.widget_username, username) } catch (_: Exception) {}
+            try { views.setTextViewText(R.id.widget_timestamp, timestamp) } catch (_: Exception) {}
 
             if (chartBitmap != null) {
                 views.setImageViewBitmap(R.id.widget_chart, chartBitmap)
             }
 
-            views.setTextViewText(R.id.widget_timestamp, timestamp)
-
-            // 刷新按钮
-            val refreshIntent = Intent(context, GithubWidgetProvider::class.java).apply {
-                action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
-            }
-            val refreshPendingIntent = PendingIntent.getBroadcast(
-                context,
-                appWidgetId,
-                refreshIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.widget_refresh, refreshPendingIntent)
-
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
+
+        fun showError(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            appWidgetId: Int,
+            errorMessage: String,
+            isDarkTheme: Boolean = false
+        ) {
+            Log.e(TAG, "showError id=$appWidgetId: $errorMessage dark=$isDarkTheme")
+            val layoutResId = getLayoutForSize(appWidgetManager, appWidgetId)
+            val views = createBaseViews(context, appWidgetId, layoutResId, isDarkTheme)
+            val errorColor = if (isDarkTheme) "#FF6B6B" else "#666666"
+            try {
+                views.setTextViewText(R.id.widget_username, "加载失败")
+                views.setTextColor(R.id.widget_username, Color.parseColor(errorColor))
+            } catch (_: Exception) {}
+            try { views.setTextViewText(R.id.widget_timestamp, errorMessage) } catch (_: Exception) {}
+            appWidgetManager.updateAppWidget(appWidgetId, views)
+        }
+
+        private fun createBaseViews(
+            context: Context,
+            appWidgetId: Int,
+            layoutResId: Int = R.layout.github_widget_layout,
+            isDarkTheme: Boolean = false
+        ): RemoteViews {
+            val views = RemoteViews(context.packageName, layoutResId)
+
+            // 设置圆角背景
+            val bgResId = if (isDarkTheme) R.drawable.widget_bg_dark else R.drawable.widget_bg_light
+            try { views.setInt(R.id.widget_root, "setBackgroundResource", bgResId) } catch (_: Exception) {}
+
+            // 设置暗色/亮色文字颜色（对没有文字的小布局静默跳过）
+            if (isDarkTheme) {
+                try { views.setTextColor(R.id.widget_username, Color.parseColor("#EEEEEE")) } catch (_: Exception) {}
+                try { views.setTextColor(R.id.widget_timestamp, Color.parseColor("#AAAAAA")) } catch (_: Exception) {}
+            } else {
+                try { views.setTextColor(R.id.widget_username, Color.parseColor("#666666")) } catch (_: Exception) {}
+                try { views.setTextColor(R.id.widget_timestamp, Color.parseColor("#999999")) } catch (_: Exception) {}
+            }
+
+            // 设置刷新按钮（没有该 ID 的布局静默跳过）
+            try {
+                val refreshIntent = Intent(context, GithubWidgetProvider::class.java).apply {
+                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
+                }
+                val refreshPendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    appWidgetId,
+                    refreshIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.widget_refresh, refreshPendingIntent)
+            } catch (_: Exception) {}
+
+            return views
+        }
+    }
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray
+    ) {
+        Log.d(TAG, "onUpdate: ids=${appWidgetIds.contentToString()}")
+        val now = System.currentTimeMillis()
+        val idsToRefresh = appWidgetIds.filter { id ->
+            val last = lastEnqueueTime[id] ?: 0L
+            if (now - last >= DEBOUNCE_MS) {
+                lastEnqueueTime[id] = now
+                true
+            } else {
+                Log.d(TAG, "onUpdate: debounce skip id=$id")
+                false
+            }
+        }
+        if (idsToRefresh.isNotEmpty()) {
+            GithubWidgetWorker.enqueueRefresh(context, idsToRefresh.toIntArray())
+        }
+    }
+
+    override fun onEnabled(context: Context) {
+        Log.d(TAG, "onEnabled: 第一个 widget 被添加")
+    }
+
+    override fun onDisabled(context: Context) {
+        Log.d(TAG, "onDisabled: 最后一个 widget 被移除")
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        Log.d(TAG, "onDeleted: ids=${appWidgetIds.contentToString()}")
+        // 清理 DataStore 中的配置数据
+        CoroutineScope(Dispatchers.IO).launch {
+            appWidgetIds.forEach { id ->
+                WidgetConfigRepository.deleteWidgetConfig(context, id)
+                Log.d(TAG, "已清理配置: id=$id")
+            }
+        }
+        super.onDeleted(context, appWidgetIds)
     }
 }

@@ -101,9 +101,17 @@
 - [x] Step 7: WorkManager 后台刷新 (含安静时段判断)
 - [x] Step 8: 设置界面 (Compose UI + ViewModel)
 - [x] Step 9: AndroidManifest 组件注册
-- [x] Step 10: ✅ 构建验证通过
+- [x] Step 10: 构建验证通过
+
+## 修复记录
+
+- [x] v0.1.1: Widget 闪烁问题修复
+  - `onUpdate` 不再修改 Widget UI（只触发后台 Worker）
+  - 添加 30 秒防抖过滤 MIUI 频繁调用
+  - Worker 使用唯一 Work + KEEP 策略防止并发
+  - 未配置用户名的 Widget 跳过不更新 UI
 
 ## 下一步
 
-- Bug 修复与测试
-- 完成后合并到 dev 分支
+- 完成功能验证后合并到 `main` 分支
+- 后续扩展更多小工具功能

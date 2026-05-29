@@ -38,7 +38,8 @@ class WidgetConfigRepository @Inject constructor(
                 quietHourStart = prefs[quietStartKey(appWidgetId)]
                     ?: WidgetConfig.DEFAULT_QUIET_START,
                 quietHourEnd = prefs[quietEndKey(appWidgetId)]
-                    ?: WidgetConfig.DEFAULT_QUIET_END
+                    ?: WidgetConfig.DEFAULT_QUIET_END,
+                theme = prefs[themeKey(appWidgetId)] ?: WidgetConfig.DEFAULT_THEME
             )
         }
     }
@@ -55,7 +56,8 @@ class WidgetConfigRepository @Inject constructor(
                 quietHourStart = prefs[quietStartKey(appWidgetId)]
                     ?: WidgetConfig.DEFAULT_QUIET_START,
                 quietHourEnd = prefs[quietEndKey(appWidgetId)]
-                    ?: WidgetConfig.DEFAULT_QUIET_END
+                    ?: WidgetConfig.DEFAULT_QUIET_END,
+                theme = prefs[themeKey(appWidgetId)] ?: WidgetConfig.DEFAULT_THEME
             )
         }.first()
     }
@@ -68,6 +70,7 @@ class WidgetConfigRepository @Inject constructor(
             prefs[refreshKey(config.appWidgetId)] = config.refreshIntervalMinutes
             prefs[quietStartKey(config.appWidgetId)] = config.quietHourStart
             prefs[quietEndKey(config.appWidgetId)] = config.quietHourEnd
+            prefs[themeKey(config.appWidgetId)] = config.theme
         }
     }
 
@@ -79,6 +82,7 @@ class WidgetConfigRepository @Inject constructor(
             prefs.remove(refreshKey(appWidgetId))
             prefs.remove(quietStartKey(appWidgetId))
             prefs.remove(quietEndKey(appWidgetId))
+            prefs.remove(themeKey(appWidgetId))
         }
     }
 
@@ -102,11 +106,25 @@ class WidgetConfigRepository @Inject constructor(
         private const val KEY_PREFIX_REFRESH = "refresh_"
         private const val KEY_PREFIX_QUIET_START = "quiet_start_"
         private const val KEY_PREFIX_QUIET_END = "quiet_end_"
+        private const val KEY_PREFIX_THEME = "theme_"
 
         private fun usernameKey(id: Int) = stringPreferencesKey("$KEY_PREFIX_USERNAME$id")
         private fun colorKey(id: Int) = stringPreferencesKey("$KEY_PREFIX_COLOR$id")
         private fun refreshKey(id: Int) = longPreferencesKey("$KEY_PREFIX_REFRESH$id")
         private fun quietStartKey(id: Int) = intPreferencesKey("$KEY_PREFIX_QUIET_START$id")
         private fun quietEndKey(id: Int) = intPreferencesKey("$KEY_PREFIX_QUIET_END$id")
+        private fun themeKey(id: Int) = stringPreferencesKey("$KEY_PREFIX_THEME$id")
+
+        /** 不使用 Hilt 的静态删除方法（用于 Provider onDeleted 等场景） */
+        suspend fun deleteWidgetConfig(context: Context, appWidgetId: Int) {
+            context.widgetConfigStore.edit { prefs ->
+                prefs.remove(usernameKey(appWidgetId))
+                prefs.remove(colorKey(appWidgetId))
+                prefs.remove(refreshKey(appWidgetId))
+                prefs.remove(quietStartKey(appWidgetId))
+                prefs.remove(quietEndKey(appWidgetId))
+                prefs.remove(themeKey(appWidgetId))
+            }
+        }
     }
 }
