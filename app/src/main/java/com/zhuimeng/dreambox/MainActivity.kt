@@ -1,8 +1,6 @@
 package com.zhuimeng.dreambox
 
-import android.appwidget.AppWidgetManager
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -13,21 +11,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.zhuimeng.dreambox.data.WidgetConfig
-import com.zhuimeng.dreambox.ui.WidgetSettingsViewModel
+import com.zhuimeng.dreambox.data.WidgetProfile
+import com.zhuimeng.dreambox.ui.ProfileViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -46,10 +43,11 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DreamboxTheme(
-    viewModel: WidgetSettingsViewModel = viewModel()
+    viewModel: ProfileViewModel = viewModel()
 ) {
-    val widgetConfigs by viewModel.widgetConfigs.collectAsStateWithLifecycle()
-    val editingConfig by viewModel.editingConfig.collectAsStateWithLifecycle()
+    val profiles by viewModel.profiles.collectAsStateWithLifecycle()
+    val editingProfile by viewModel.editingProfile.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -70,22 +68,14 @@ fun DreamboxTheme(
             )
         },
         floatingActionButton = {
-            val context = LocalContext.current
             ExtendedFloatingActionButton(
-                onClick = {
-                    Toast.makeText(
-                        context,
-                        "请在桌面长按空白处 → 添加 Widget 来添加新的 GitHub 热力图",
-                        Toast.LENGTH_LONG
-                    ).show()
-                },
-                icon = { Icon(Icons.Default.Add, contentDescription = "添加") },
-                text = { Text("添加 Widget") }
+                onClick = { viewModel.createProfile() },
+                icon = { Icon(Icons.Default.Add, contentDescription = "新建") },
+                text = { Text("新建配置") }
             )
         }
     ) { padding ->
-        if (widgetConfigs.isEmpty()) {
-            // 空状态
+        if (profiles.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -94,13 +84,13 @@ fun DreamboxTheme(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "暂无 Widget 配置",
+                        "暂无配置",
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "点击下方按钮添加 GitHub 贡献热力图 Widget",
+                        "点击下方按钮创建 GitHub 配置，\n然后在桌面添加 Widget 选择使用",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -115,22 +105,21 @@ fun DreamboxTheme(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                items(widgetConfigs, key = { it.appWidgetId }) { config ->
-                    WidgetConfigCard(
-                        config = config,
-                        onEdit = { viewModel.editConfig(config) },
-                        onDelete = { viewModel.deleteConfig(config.appWidgetId) },
-                        onRefresh = { viewModel.triggerRefresh(config.appWidgetId) }
+                items(profiles, key = { it.id }) { profile ->
+                    ProfileCard(
+                        profile = profile,
+                        onEdit = { viewModel.editProfile(profile) },
+                        onDelete = { viewModel.deleteProfile(profile.id) }
                     )
                 }
             }
         }
 
-        // 编辑对话框
-        editingConfig?.let { config ->
-            WidgetConfigDialog(
-                config = config,
-                onSave = { viewModel.saveConfig(it) },
+        // 编辑/新建对话框
+        editingProfile?.let { profile ->
+            ProfileEditDialog(
+                profile = profile,
+                onSave = { viewModel.saveProfile(it) },
                 onDismiss = { viewModel.cancelEdit() }
             )
         }
@@ -138,11 +127,10 @@ fun DreamboxTheme(
 }
 
 @Composable
-fun WidgetConfigCard(
-    config: WidgetConfig,
+fun ProfileCard(
+    profile: WidgetProfile,
     onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onRefresh: () -> Unit
+    onDelete: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -151,109 +139,88 @@ fun WidgetConfigCard(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // 标题行：用户名 + ID
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 颜色指示器
-                    Surface(
-                        modifier = Modifier.size(16.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        color = hexToColor(config.color)
-                    ) {}
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = config.username.ifBlank { "未设置" },
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                }
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 颜色指示器
+            Surface(
+                modifier = Modifier.size(24.dp),
+                shape = RoundedCornerShape(6.dp),
+                color = parseColor(profile.color)
+            ) {}
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "#${config.appWidgetId}",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = profile.name.ifBlank { profile.username.ifBlank { "未命名" } },
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
                 )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 详情行
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                DetailItem("刷新", "每 ${config.refreshIntervalMinutes} 分钟")
-                DetailItem("安静时段", "${config.quietHourStart}:00 - ${config.quietHourEnd}:00")
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 操作按钮
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                IconButton(onClick = onRefresh) {
-                    Icon(Icons.Default.Refresh, contentDescription = "刷新")
-                }
-                IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "编辑")
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "删除",
-                        tint = MaterialTheme.colorScheme.error
+                if (profile.username.isNotBlank()) {
+                    Text(
+                        text = "@${profile.username}",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Default.Edit, contentDescription = "编辑")
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "删除",
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
 }
 
 @Composable
-fun DetailItem(label: String, value: String) {
-    Column {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+private fun parseColor(hex: String): Color {
+    return try {
+        Color(android.graphics.Color.parseColor("#$hex"))
+    } catch (_: Exception) {
+        Color(android.graphics.Color.parseColor("#198754"))
     }
 }
 
-/**
- * Widget 配置编辑对话框
- */
 @Composable
-fun WidgetConfigDialog(
-    config: WidgetConfig,
-    onSave: (WidgetConfig) -> Unit,
+fun ProfileEditDialog(
+    profile: WidgetProfile,
+    onSave: (WidgetProfile) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var username by remember { mutableStateOf(config.username) }
-    var color by remember { mutableStateOf(config.color) }
+    var name by remember { mutableStateOf(profile.name) }
+    var username by remember { mutableStateOf(profile.username) }
+    var color by remember { mutableStateOf(profile.color) }
     var refreshInterval by remember {
-        mutableStateOf(config.refreshIntervalMinutes.toString())
+        mutableStateOf(profile.refreshIntervalMinutes.toString())
     }
-    var quietStart by remember { mutableStateOf(config.quietHourStart.toString()) }
-    var quietEnd by remember { mutableStateOf(config.quietHourEnd.toString()) }
-    var isDarkTheme by remember { mutableStateOf(config.theme == WidgetConfig.THEME_DARK) }
+    var quietStart by remember { mutableStateOf(profile.quietHourStart.toString()) }
+    var quietEnd by remember { mutableStateOf(profile.quietHourEnd.toString()) }
+    var isDarkTheme by remember { mutableStateOf(profile.theme == WidgetProfile.THEME_DARK) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Widget 配置") },
+        title = { Text(if (profile.id.isBlank()) "新建配置" else "编辑配置") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("配置名称") },
+                    placeholder = { Text("如 工作号、小号") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 OutlinedTextField(
                     value = username,
                     onValueChange = { username = it },
@@ -281,21 +248,25 @@ fun WidgetConfigDialog(
                     OutlinedTextField(
                         value = quietStart,
                         onValueChange = { quietStart = it },
-                        label = { Text("安静时段开始") },
-                        placeholder = { Text("22") },
+                        label = { Text("安静开始（0~23 时）") },
+                        placeholder = { Text("例: 22") },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = quietEnd,
                         onValueChange = { quietEnd = it },
-                        label = { Text("安静时段结束") },
-                        placeholder = { Text("7") },
+                        label = { Text("安静结束（0~23 时）") },
+                        placeholder = { Text("例: 7") },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
                 }
-                // 暗色主题开关
+                Text(
+                    text = "两端相同时=关闭，支持跨天（如22~7表示夜间不刷新）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -311,17 +282,18 @@ fun WidgetConfigDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                val updated = config.copy(
+                val updated = profile.copy(
+                    name = name.trim(),
                     username = username.trim(),
-                    color = color.trim().ifBlank { WidgetConfig.DEFAULT_COLOR },
+                    color = color.trim().ifBlank { WidgetProfile.DEFAULT_COLOR },
                     refreshIntervalMinutes = refreshInterval.toLongOrNull()
-                        ?: WidgetConfig.DEFAULT_REFRESH_INTERVAL,
+                        ?: WidgetProfile.DEFAULT_REFRESH_INTERVAL,
                     quietHourStart = quietStart.toIntOrNull()
-                        ?: WidgetConfig.DEFAULT_QUIET_START,
+                        ?: WidgetProfile.DEFAULT_QUIET_START,
                     quietHourEnd = quietEnd.toIntOrNull()
-                        ?: WidgetConfig.DEFAULT_QUIET_END,
-                    theme = if (isDarkTheme) WidgetConfig.THEME_DARK
-                        else WidgetConfig.THEME_LIGHT
+                        ?: WidgetProfile.DEFAULT_QUIET_END,
+                    theme = if (isDarkTheme) WidgetProfile.THEME_DARK
+                        else WidgetProfile.THEME_LIGHT
                 )
                 onSave(updated)
             }) {
@@ -334,14 +306,4 @@ fun WidgetConfigDialog(
             }
         }
     )
-}
-
-/** 十六进制颜色字符串 → Compose Color */
-@Composable
-private fun hexToColor(hex: String): Color {
-    return try {
-        Color(android.graphics.Color.parseColor("#$hex"))
-    } catch (_: Exception) {
-        Color(android.graphics.Color.parseColor("#198754"))
-    }
 }

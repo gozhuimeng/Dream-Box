@@ -9,7 +9,7 @@ import android.graphics.Color
 import android.util.Log
 import android.widget.RemoteViews
 import com.zhuimeng.dreambox.R
-import com.zhuimeng.dreambox.data.WidgetConfigRepository
+import com.zhuimeng.dreambox.data.WidgetMappingRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -86,7 +86,7 @@ open class GithubWidgetProvider : AppWidgetProvider() {
             val bgResId = if (isDarkTheme) R.drawable.widget_bg_dark else R.drawable.widget_bg_light
             try { views.setInt(R.id.widget_root, "setBackgroundResource", bgResId) } catch (_: Exception) {}
 
-            // 设置暗色/亮色文字颜色（对没有文字的小布局静默跳过）
+            // 设置暗色/亮色文字颜色
             if (isDarkTheme) {
                 try { views.setTextColor(R.id.widget_username, Color.parseColor("#EEEEEE")) } catch (_: Exception) {}
                 try { views.setTextColor(R.id.widget_timestamp, Color.parseColor("#AAAAAA")) } catch (_: Exception) {}
@@ -95,7 +95,7 @@ open class GithubWidgetProvider : AppWidgetProvider() {
                 try { views.setTextColor(R.id.widget_timestamp, Color.parseColor("#999999")) } catch (_: Exception) {}
             }
 
-            // 设置刷新按钮（没有该 ID 的布局静默跳过）
+            // 设置刷新按钮
             try {
                 val refreshIntent = Intent(context, GithubWidgetProvider::class.java).apply {
                     action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
@@ -108,6 +108,22 @@ open class GithubWidgetProvider : AppWidgetProvider() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 views.setOnClickPendingIntent(R.id.widget_refresh, refreshPendingIntent)
+            } catch (_: Exception) {}
+
+            // 设置点击 Widget 主体 → 打开 Profile 选择器
+            try {
+                val pickIntent = Intent(context, WidgetConfigureActivity::class.java).apply {
+                    action = WidgetConfigureActivity.ACTION_PICK_PROFILE
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                val pickPendingIntent = PendingIntent.getActivity(
+                    context,
+                    appWidgetId + 10000, // 不同 ID 避免与 refresh 冲突
+                    pickIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.widget_root, pickPendingIntent)
             } catch (_: Exception) {}
 
             return views
@@ -146,11 +162,11 @@ open class GithubWidgetProvider : AppWidgetProvider() {
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         Log.d(TAG, "onDeleted: ids=${appWidgetIds.contentToString()}")
-        // 清理 DataStore 中的配置数据
         CoroutineScope(Dispatchers.IO).launch {
             appWidgetIds.forEach { id ->
-                WidgetConfigRepository.deleteWidgetConfig(context, id)
-                Log.d(TAG, "已清理配置: id=$id")
+                // 清理映射关系
+                WidgetMappingRepository(context).removeWidget(id)
+                Log.d(TAG, "已清理映射: widget=$id")
             }
         }
         super.onDeleted(context, appWidgetIds)

@@ -1,14 +1,14 @@
 # AGENTS.md - Android Project
 
 ## Active Plans
-- [PLAN.md](./PLAN.md) - GitHub 贡献热力图 Widget 开发计划 (v0.1.3: 配置项与 Widget 解耦)
+- [PLAN.md](./PLAN.md) - GitHub 贡献热力图 Widget 开发计划 (v0.1.3)
 
 ## 项目信息
 - 项目名: **dreambox** (坠梦)
 - 包名: `com.zhuimeng.dreambox`
 - 定位: 个人工具箱 App
 - 最低SDK: 24 / 目标SDK: 34
-- 当前状态: 4x2 + 2x1 双 Widget，支持暗色主题 + 圆角，v0.1.3 计划中
+- 当前状态: 配置项解耦 + 安静时段优化 + Worker 健壮性增强
 - 开发分支: `dev`
 
 ## 网络代理策略
@@ -160,23 +160,37 @@ data/          → repository/ (实现), remote/ (API), local/ (存储)
 | FAB "添加 Widget" 产生无效配置 | 改为 Toast 提示用户从桌面添加 |
 | 编辑对话框保存时未传 theme | `config.copy()` 中包含 `theme` 字段 |
 
-### Phase 6: 架构重构 — 配置项与 Widget 解耦 (计划中 🔄)
-| 需求 | 说明 |
-|------|------|
-| Profile 数据模型 | 独立的配置项，由 `appWidgetId` 解耦为 `profileId` |
-| Profile 管理界面 | App 内独立创建/编辑/删除配置项 |
-| Widget 引用 Profile | Widget 绑定一个已存在的 Profile，不直接持有配置 |
-| Widget 配置流程 | 添加 Widget 时从已有 Profile 列表中选择 |
-| 点击 Widget → 配置页 | 点击桌面 Widget 打开配置页，可切换/新建 Profile |
-| 按 Profile 刷新 | 仅刷新被活跃 Widget 引用的 Profile |
-| 配置复用 | 同一个 Profile 可被多个 Widget 使用 |
-| 向下兼容 | 现有配置自动迁移为 Profile |
+### Phase 6: 架构重构 — 配置项与 Widget 解耦 (v0.1.3)
+| 需求 | 状态 | 说明 |
+|------|------|------|
+| Profile 数据模型 | ✅ | 独立配置项 `WidgetProfile`，使用 UUID 作为 ID |
+| Profile 管理界面 | ✅ | App 主页改为 Profile 列表，支持新建/编辑/删除 |
+| Widget 引用 Profile | ✅ | `WidgetMappingRepository` 管理 appWidgetId ↔ profileId 映射 |
+| Widget 新增流程 | ✅ | 添加 Widget → 选择已有 Profile 或新建 |
+| 点击 Widget → 配置页 | ✅ | 点击 Widget 主体打开 Profile 选择器，可切换/新建 |
+| 按 Profile 刷新 | ✅ | Worker 通过映射读取 Profile，未被引用的不刷新 |
+| 配置复用 | ✅ | 同一 Profile 可被多个 Widget 同时使用 |
+| 向下兼容 | ✅ | 首次启动自动迁移旧版 WidgetConfig → Profile |
+
+### Phase 7: v0.1.3 Bugfix — Worker 健壮性 + 安静时段修复
+| 问题 | 状态 | 修复方案 |
+|------|------|---------|
+| 切换 Profile 后 Widget 不刷新（卡在"更新中..."） | ✅ | 根因: 切换到的 Profile 设了安静时段(22~7) → Worker 在夜间卡住 |
+| 安静时段导致 Widget 卡住 | ✅ | 将安静时段检查移到 "更新中..." 设置之前，避免卡死 |
+| 手动刷新被安静时段拦截 | ✅ | `forceRefresh()` 传入 `KEY_FORCE_REFRESH=true` 跳过安静时段检查 |
+| forceRefresh 竞态条件 | ✅ | 移除 cancel + enqueue 模式，统一用 `ExistingWorkPolicy.REPLACE` |
+| SVG 获取无超时保护 | ✅ | 添加 `withTimeout(60s)` + `withContext(IO)` |
+| Worker catch 块无回退 | ✅ | catch 块中 DataStore 读取失败时，回退显示占位错误 UI |
+| Widget 待配置/无用户时光标不可见 | ✅ | mapping 为空或 username 为空时显示错误提示而非空白 |
+| 安静时段 UI 易用性 | ✅ | 标签改为"安静开始(0~23时)"，placeholder 改为"例: 22"，添加助手文字 |
 
 ## Git 规范
 ```
 feat(widget): 添加 GitHub 贡献热力图 Widget
 fix(widget): 修复 Widget 闪烁问题
 fix(widget): 添加 onUpdate 防抖机制
+fix(widget): 修复安静时段导致 Widget 卡住问题
+fix(worker): 增强 Worker 健壮性，添加超时保护与回退 UI
 ```
 分支策略:
 - `main` — 稳定版本 (保护)
@@ -221,14 +235,19 @@ data/          → repository/ (实现), remote/ (API), local/ (存储)
 | `GithubWidgetTinyProvider` | 2x1 迷你 Widget (继承 4x2) |
 | `GithubWidgetWorker` | 后台刷新: 获取 SVG → 渲染 → 更新 RemoteViews |
 | `SvgRenderer` | 裁剪/缩放 SVG 适应 Widget 尺寸 |
-| `WidgetConfigRepository` | DataStore 持久化，按 appWidgetId 存储 |
-| `WidgetConfigureActivity` | 首次添加 Widget 的配置界面 |
-| `WidgetSettingsViewModel` | 应用内 Widget 列表 & 编辑 |
-| `MainActivity` | Compose 主界面，展示已配置的 Widget 列表 |
+| `WidgetProfile` | 独立配置项（Profile）数据模型 |
+| `WidgetProfileRepository` | Profile 持久化，按 profileId 存储 |
+| `WidgetMappingRepository` | appWidgetId ↔ profileId 映射管理 |
+| `WidgetConfigureActivity` | Profile 选择器（添加/切换 Widget 时使用） |
+| `ProfileViewModel` | 应用内 Profile 管理 |
+| `MainActivity` | Compose 主界面，展示 Profile 列表 |
 
 ### 关键修复记录
 - **闪烁修复**: MIUI 每秒触发 onUpdate → onUpdate 不再修改 UI + 30秒防抖 + UniqueWork KEEP
 - **SVG 缩放**: 裁剪左侧标签 + 放大填满 + 右侧对齐
 - **跳过配置修复**: 跳过时保存默认配置，Widget 在 App 设置中可见
 - **DataStore 清理**: Widget 被删除时自动清理配置数据
-- **版本**: v0.1.2 (versionCode 3)
+- **配置项解耦 (v0.1.3)**: Profile 独立于 Widget，可复用、自由创建/编辑/删除
+- **安静时段卡住修复**: 检查移到 "更新中..." 之前，forceRefresh 跳过安静时段
+- **Worker 健壮性**: SVG 超时保护(60s)、catch 回退 UI、REPLACE 避免竞态
+- **版本**: v0.1.3 (versionCode 4)
