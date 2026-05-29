@@ -126,4 +126,96 @@
 
 - [x] 功能开发完成，已合并到 `dev`
 - [x] v0.1.2 Release 发布
-- [ ] 后续扩展更多小工具功能
+- [ ] v0.1.3: 架构重构 — 配置项与 Widget 解耦
+
+---
+
+## v0.1.3 计划: 配置项与 Widget 解耦
+
+### 痛点分析
+
+当前问题:
+1. 必须先添加 Widget，才能配置（"创建小部件，然后填好配置"）
+2. 配置绑定 appWidgetId，Widget 删除后配置也消失
+3. 没有"独立配置项"的概念，无法预先创建多套配置
+
+### 目标
+
+```
+旧: Widget ← 1:1 → 配置（毁 widget = 丢配置）
+新: Widget → 引用 → Profile（独立配置项，可复用）
+                        ↑
+                    App 内自由创建/编辑/删除
+```
+
+### 详细方案
+
+#### 1. 数据模型重构
+
+| 当前 (v0.1.2) | 新 (v0.1.3) |
+|---|---|
+| `WidgetConfig(appWidgetId, username, color, ...)` | `WidgetProfile(id, name, username, color, ...)` |
+| key = appWidgetId | key = profileId (UUID) |
+| 无用户命名 | 新增 `name` 字段（如"工作号"、"小号"） |
+
+新增映射表: `appWidgetId → profileId`（一个 profile 可被多个 widget 引用）
+
+#### 2. 存储层变化
+
+- **Profile 存储**: 独立 DataStore（或同一 DataStore 用不同 key prefix）
+  - `profile_${profileId}_name`
+  - `profile_${profileId}_username`
+  - `profile_${profileId}_color`
+  - etc.
+- **映射存储**: `widget_profile_map` DataStore
+  - `widget_${appWidgetId}_profile` → profileId
+
+#### 3. 界面变化
+
+- **App 主页** → 显示 **Profile 列表**（不是 widget 列表）
+  - 每个卡片: profile name, username, 预览颜色, 已关联 widget 数
+  - FAB: 新建 Profile
+  - 点击: 编辑 Profile
+  - 长按/侧滑: 删除 Profile
+- **移除** 旧有的"以 widget 为中心"的列表
+
+#### 4. Widget 配置流程变化
+
+- **添加 Widget** → `WidgetConfigureActivity` 打开
+  - 显示所有已有 Profile 列表供选择
+  - 底部"新建 Profile"按钮
+  - 选择后 → widget 绑定该 profile
+- **点击 Widget** → 打开 App 到 Profile 列表（或快速切换 Profile）
+
+#### 5. 刷新逻辑变化
+
+- `GithubWidgetWorker` 以 **profile** 为单位刷新
+- 刷新前检查 profile 是否被至少一个活跃 widget 引用
+- 未被引用的 profile 跳过刷新（省流量省电）
+- `onDeleted`: 检查是否还有其他 widget 引用该 profile，无则停止刷新
+
+#### 6. 配置项管理（新增功能）
+
+- **独立创建**：在 App 中直接新建 Profile，填写用户名/颜色/主题等
+- **独立删除**：删除 Profile 时，已关联的 widget 显示"配置已删除"提示
+- **复用**：同一个 Profile 可被多个 Widget 引用
+- **改名**：Profile 支持自定义名称
+
+### 主要影响文件
+
+| 文件 | 变化 |
+|------|------|
+| `data/WidgetConfig.kt` | 重命名为 `WidgetProfile.kt`，添加 `id` 和 `name` 字段 |
+| `data/WidgetConfigRepository.kt` | 重写为 Profile 存储 + widget→profile 映射 |
+| `widget/WidgetConfigureActivity.kt` | 改为 Profile 选择界面 |
+| `widget/GithubWidgetProvider.kt` | onUpdate 改为读取 profile |
+| `widget/GithubWidgetWorker.kt` | 按 profile 刷新，检查引用 |
+| `ui/WidgetSettingsViewModel.kt` | 重构为 Profile 管理 |
+| `MainActivity.kt` | 改为 Profile 列表 UI |
+| `AGENTS.md` | 更新记录 |
+
+### 注意事项
+
+- **向下兼容**: 旧版用户已有 widget 配置需要迁移为 Profile
+- **UUID 生成**: Profile ID 使用 `UUID.randomUUID().toString()`
+- **不展示不刷新**: 核心原则 — 没有被任何 widget 引用的 profile 不触发网络请求

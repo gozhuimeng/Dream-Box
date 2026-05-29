@@ -1,14 +1,14 @@
 # AGENTS.md - Android Project
 
 ## Active Plans
-- [PLAN.md](./PLAN.md) - GitHub 贡献热力图 Widget 开发计划
+- [PLAN.md](./PLAN.md) - GitHub 贡献热力图 Widget 开发计划 (v0.1.3: 配置项与 Widget 解耦)
 
 ## 项目信息
 - 项目名: **dreambox** (坠梦)
 - 包名: `com.zhuimeng.dreambox`
 - 定位: 个人工具箱 App
 - 最低SDK: 24 / 目标SDK: 34
-- 当前状态: 4x2 + 2x1 双 Widget，支持暗色主题 + 圆角
+- 当前状态: 4x2 + 2x1 双 Widget，支持暗色主题 + 圆角，v0.1.3 计划中
 - 开发分支: `dev`
 
 ## 网络代理策略
@@ -159,6 +159,17 @@ data/          → repository/ (实现), remote/ (API), local/ (存储)
 | 编辑对话框缺少主题开关 | 在 `WidgetConfigDialog` 中添加暗色主题 Switch |
 | FAB "添加 Widget" 产生无效配置 | 改为 Toast 提示用户从桌面添加 |
 | 编辑对话框保存时未传 theme | `config.copy()` 中包含 `theme` 字段 |
+
+### Phase 6: 架构重构 — 配置项与 Widget 解耦 (计划中 🔄)
+| 需求 | 说明 |
+|------|------|
+| Profile 数据模型 | 独立的配置项，由 `appWidgetId` 解耦为 `profileId` |
+| Profile 管理界面 | App 内独立创建/编辑/删除配置项 |
+| Widget 引用 Profile | Widget 绑定一个已存在的 Profile，不直接持有配置 |
+| Widget 配置流程 | 添加 Widget 时从已有 Profile 列表中选择 |
+| 按 Profile 刷新 | 仅刷新被活跃 Widget 引用的 Profile |
+| 配置复用 | 同一个 Profile 可被多个 Widget 使用 |
+| 向下兼容 | 现有配置自动迁移为 Profile |
 
 ## Git 规范
 ```
