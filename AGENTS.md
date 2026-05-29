@@ -1,14 +1,15 @@
 # AGENTS.md - Android Project
 
 ## Active Plans
-- [PLAN.md](./PLAN.md) - GitHub 贡献热力图 Widget 开发计划 (v0.1.3)
+- [PLAN.md](./PLAN.md) - GitHub 贡献热力图 Widget (v0.1.x ✅ 已归档) — 下一阶段 v0.2.x 待规划
 
 ## 项目信息
 - 项目名: **dreambox** (坠梦)
 - 包名: `com.zhuimeng.dreambox`
 - 定位: 个人工具箱 App
 - 最低SDK: 24 / 目标SDK: 34
-- 当前状态: 配置项解耦 + 安静时段优化 + Worker 健壮性增强
+- 当前状态: v0.1.x 开发完成 ✅ — GitHub 贡献热力图 Widget 功能完善
+- 下一阶段: v0.2.x (待规划)
 - 开发分支: `dev`
 
 ## 网络代理策略
