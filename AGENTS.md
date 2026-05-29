@@ -191,10 +191,13 @@ fix(widget): 修复 Widget 闪烁问题
 fix(widget): 添加 onUpdate 防抖机制
 fix(widget): 修复安静时段导致 Widget 卡住问题
 fix(worker): 增强 Worker 健壮性，添加超时保护与回退 UI
+docs: 更新 README，添加 AI 生成声明
+release: v0.1.3
 ```
 分支策略:
-- `main` — 稳定版本 (保护)
-- `dev` — 开发集成分支 (保护)
+- `main` — 稳定版本 (保护) ✅ 已推送
+- `dev` — 开发集成分支 (保护) ✅ 已推送
+- `feat/github-widget` — 已完成的功能分支 ✅ 已推送
 - `feat/<scope>` — 功能分支
 - `fix/<scope>` — 修复分支
 提交信息使用中文描述 (见 git-convention 技能)

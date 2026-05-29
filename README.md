@@ -12,11 +12,10 @@
   <a href="https://github.com/gozhuimeng/Dream-Box/releases">
     <img src="https://img.shields.io/github/v/release/gozhuimeng/Dream-Box?label=版本" alt="Release">
   </a>
-  <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-orange" alt="License">
-  <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-orange" alt="License">
   <img src="https://img.shields.io/badge/minSdk-24-brightgreen" alt="minSdk 24">
   <img src="https://img.shields.io/badge/targetSdk-34-blue" alt="targetSdk 34">
   <img src="https://img.shields.io/badge/Kotlin-2.0-purple" alt="Kotlin 2.0">
+  <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-orange" alt="License">
 </p>
 
 ## 📄 许可协议
@@ -30,6 +29,7 @@
 完整协议文本见 [LICENSE](LICENSE) 文件。
 
 ---
+
 **Dreambox（坠梦）** 是一款个人 Android 工具箱应用，当前唯一功能是 **GitHub 贡献热力图桌面 Widget**。
 
 将你的 GitHub 贡献热力图直接放在手机桌面上，无需打开 App 即可一目了然 —— 支持 4x2 和 2x1 两种尺寸。
@@ -45,11 +45,12 @@
 - ✅ **多用户支持** — 每个 Widget 实例独立配置 GitHub 用户名
 - ✅ **自定义颜色** — 支持任意 16 进制色码
 - ✅ **自定义刷新频率** — 可配置刷新间隔
-- ✅ **安静时段** — 设置夜间不刷新，省电省流量
+- ✅ **安静时段** — 设置夜间不刷新，省电省流量；支持跨天（如 22~7）
 - ✅ **暗色主题** — 半透明暗色背景（`#E61C1B1F`）+ 12dp 圆角
 - ✅ **亮色/暗色切换** — 每个 Widget 独立设置
-- ✅ **手动刷新** — 一键立即更新
-- ✅ **应用内管理** — 列表查看、编辑、删除所有已配置的 Widget
+- ✅ **手动刷新** — 一键立即更新，手动刷新跳过安静时段
+- ✅ **Profile 配置管理** — 独立配置项（Profile），可被多个 Widget 复用，支持自定义名称
+- ✅ **应用内管理** — Profile 列表，支持新建/编辑/删除
 - ✅ **MIUI 兼容** — 修复了 MIUI 桌面频繁调用导致的闪烁问题
 
 ---
@@ -77,16 +78,17 @@
 2. 选择 **Widgets / 小工具**
 3. 找到 **Dreambox**
 4. 选择 **4x2** 或 **2x1** 尺寸添加到桌面
-5. 在弹出的配置界面中输入 GitHub 用户名
-6. 或**跳过配置**，稍后在 App 中编辑
+5. 在弹出的配置界面中选择已有的 **Profile**，或新建一个
+6. 也可以**跳过**，稍后在 App 中管理
 
 ### 配置 / 管理
 
-打开 **Dreambox** App，即可看到所有已添加的 Widget 列表：
+打开 **Dreambox** App，即可看到所有 Profile 列表：
 
-- 点击 ✏️ **编辑** — 修改用户名、颜色、刷新频率、暗色主题等
-- 点击 🔄 **刷新** — 立即更新 Widget
-- 点击 🗑️ **删除** — 删除配置（Widget 也会从桌面移除）
+- 点击 **编辑** — 修改用户名、颜色、刷新频率、安静时段、暗色主题等
+- **点击 Widget** — 直接在桌面点击 Widget 主体，打开 Profile 选择器切换
+- **Profile 复用** — 同一个 Profile 可被多个 Widget 同时使用
+- **删除 Profile** — 已关联的 Widget 显示"配置已删除"提示
 
 ---
 
@@ -129,36 +131,38 @@ cd Dream-Box
 
 ---
 
-## 📂 项目结构
+## 📂 项目结构 (v0.1.3)
 
 ```
 app/
 ├── src/main/
 │   ├── java/com/zhuimeng/dreambox/
 │   │   ├── data/
-│   │   │   ├── GithubChartApi.kt       # SVG 数据获取
-│   │   │   ├── SvgRenderer.kt           # SVG 裁剪/缩放/渲染
-│   │   │   ├── WidgetConfig.kt          # 配置数据模型
-│   │   │   └── WidgetConfigRepository.kt # DataStore 持久化
+│   │   │   ├── GithubChartApi.kt               # SVG 数据获取
+│   │   │   ├── SvgRenderer.kt                  # SVG 裁剪/缩放/渲染
+│   │   │   ├── WidgetProfile.kt                # Profile 数据模型
+│   │   │   ├── WidgetProfileRepository.kt      # Profile DataStore 持久化
+│   │   │   ├── WidgetMappingRepository.kt      # appWidgetId ↔ profileId 映射
+│   │   │   └── MigrationHelper.kt              # 旧版配置 → Profile 迁移
 │   │   ├── ui/
-│   │   │   └── WidgetSettingsViewModel.kt # 设置界面 ViewModel
+│   │   │   └── ProfileViewModel.kt             # Profile 管理 ViewModel
 │   │   ├── widget/
-│   │   │   ├── GithubWidgetProvider.kt    # 4x2 Widget Provider
-│   │   │   ├── GithubWidgetTinyProvider.kt # 2x1 Widget Provider
-│   │   │   ├── GithubWidgetWorker.kt      # 后台刷新 Worker
-│   │   │   └── WidgetConfigureActivity.kt # 配置 Activity
-│   │   ├── DreamboxApp.kt               # Application 类
-│   │   └── MainActivity.kt              # 主界面 (Compose)
+│   │   │   ├── GithubWidgetProvider.kt          # 4x2 Widget Provider
+│   │   │   ├── GithubWidgetTinyProvider.kt      # 2x1 Widget Provider
+│   │   │   ├── GithubWidgetWorker.kt            # 后台刷新 Worker
+│   │   │   └── WidgetConfigureActivity.kt       # Profile 选择器
+│   │   ├── DreamboxApp.kt                      # Application 类（Hilt + WorkManager）
+│   │   └── MainActivity.kt                     # 主界面 (Compose Profile 列表)
 │   ├── res/
 │   │   ├── drawable/
-│   │   │   ├── widget_bg_light.xml      # 亮色圆角背景
-│   │   │   └── widget_bg_dark.xml       # 暗色圆角背景
+│   │   │   ├── widget_bg_light.xml             # 亮色圆角背景
+│   │   │   └── widget_bg_dark.xml              # 暗色圆角背景
 │   │   ├── layout/
-│   │   │   ├── github_widget_layout.xml      # 4x2 布局
-│   │   │   └── github_widget_layout_tiny.xml # 2x1 布局
+│   │   │   ├── github_widget_layout.xml        # 4x2 布局
+│   │   │   └── github_widget_layout_tiny.xml   # 2x1 布局
 │   │   └── xml/
-│   │       ├── github_widget_info.xml        # 4x2 元数据
-│   │       └── github_widget_tiny_info.xml   # 2x1 元数据
+│   │       ├── github_widget_info.xml          # 4x2 元数据
+│   │       └── github_widget_tiny_info.xml     # 2x1 元数据
 ```
 
 ---
@@ -178,11 +182,33 @@ app/
 
 ### 如何修改 Widget 颜色？
 
-打开 Dreambox App → 点击 Widget 旁的 ✏️ → 修改颜色（16 进制，如 `#39D353`）。
+打开 Dreambox App → 编辑对应 Profile → 修改颜色（16 进制，如 `#39D353`）。
 
 ### 为什么无法从 App 内添加 Widget？
 
 Android 桌面 Widget 必须从**桌面长按 → 添加 Widget** 操作。App 内的"添加 Widget"按钮仅提供引导说明。
+
+### 什么是 Profile？
+
+v0.1.3 引入了 **Profile（配置项）** 概念：一个 Profile 包含一组完整的 Widget 配置（用户名、颜色、刷新频率、安静时段、暗色主题），可以独立创建/编辑/删除，也可以被多个 Widget 同时引用。这样你只需要配置一次，就能让桌面上的多个 Widget 展示相同的内容。
+
+---
+
+## 🤖 开发说明
+
+本项目**全部代码**均由 **AI 大语言模型（LLM）与 AI Agent** 自动生成，包括但不限于：
+- 项目架构设计与实现
+- 所有 Kotlin/XML/Gradle 代码
+- 文档（README、AGENTS.md 等）
+- Git 提交与发布流程
+
+人类开发者的角色仅为：
+- 提出功能需求和验收标准
+- 通过自然语言指令引导 AI 生成代码
+- 在 Android 真机上进行功能测试
+- 提供网络代理等运行环境支持
+
+> ⚠️ **免责声明**：本项目为 AI 生成实验性作品，作者及 LLM 平台（包括但不限于 DeepSeek 等）**不对因使用本项目造成的任何直接或间接损失负责**，包括但不限于数据丢失、设备故障、隐私泄露或其他意外后果。使用本软件即视为您已理解并接受此风险。
 
 ---
 
@@ -190,8 +216,6 @@ Android 桌面 Widget 必须从**桌面长按 → 添加 Widget** 操作。App �
 
 ---
 
-
-
 <p align="center">
-  <sub>用 ❤️ 和 Kotlin 打造 | 个人项目 · 持续进化中</sub>
+  <sub>用 ❤️、Kotlin 和 AI 打造 | 个人项目 · 持续进化中</sub>
 </p>
