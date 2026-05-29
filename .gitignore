@@ -1,0 +1,20 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.aab
+*.ap_
+*.hprof
+
+# App module
+/app/build/
+
+# Agent 驱动的项目，版本控制计划与状态文档
+!AGENTS.md
+!PLAN.md
