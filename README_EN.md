@@ -210,12 +210,6 @@ The human developer's role is limited to:
 
 > ⚠️ **Disclaimer**: This project is an AI-generated experimental work. Neither the author nor the LLM platforms (including but not limited to DeepSeek, etc.) shall be held **liable for any direct or indirect damages** arising from the use of this software, including but not limited to data loss, device failure, privacy breaches, or other unforeseen consequences. By using this software, you acknowledge and accept this risk.
 
----
-
-## 📄 License
-
----
-
 <p align="center">
   <sub>Made with ❤️, Kotlin & AI | Personal project · Continuously evolving</sub>
 </p>
